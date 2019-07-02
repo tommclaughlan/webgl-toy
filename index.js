@@ -11,13 +11,16 @@ const vsSource = `
 `;
 
 const fsSource = `
+    precision mediump float;
+    uniform vec4 uColor;
     void main() {
-        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        gl_FragColor = uColor;
     }
 `;
 
 function main() {
-    const canvas = document.querySelector('canvas')
+    /** @type {HTMLCanvasElement} */
+    const canvas = document.querySelector('#webgl')
     const gl = canvas.getContext('webgl');
 
     if (!gl) {
@@ -29,31 +32,31 @@ function main() {
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
     const program = createProgram(gl, vertexShader, fragmentShader);
 
-    const positionAttributeLocation = gl.getAttribLocation(program, 'aPosition');
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    render(gl, program);
+}
 
-    const resolutionUniformLocation = gl.getUniformLocation(program, 'uResolution');
+main();
 
-    const positions = [
-        0, 0,
-        0, 50,
-        700, 0
-    ];
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-
+/**
+ *
+ * @param {WebGLRenderingContextBase} gl
+ * @param {WebGLProgram} program
+ */
+function render(gl, program) {
     resizeCanvas(gl.canvas);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    gl.useProgram(program);
+    const resolutionUniformLocation = gl.getUniformLocation(program, 'uResolution');
+    const positionAttributeLocation = gl.getAttribLocation(program, 'aPosition');
 
-    gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
-
-    gl.enableVertexAttribArray(positionAttributeLocation);
-
+    const positionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+    gl.useProgram(program);
+    gl.enableVertexAttribArray(positionAttributeLocation);
+    gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
 
     const size = 2;
     const type = gl.FLOAT;
@@ -62,12 +65,166 @@ function main() {
     const offset = 0;
     gl.vertexAttribPointer(positionAttributeLocation, size, type, normalize, stride, offset);
 
-    const primitiveType = gl.TRIANGLES;
-    const count = 3;
-    gl.drawArrays(primitiveType, offset, count);
+    const colorUniformLocation = gl.getUniformLocation(program, 'uColor');
+
+    gl.uniform4f(colorUniformLocation, 0, 0, 1, 1);
+
+    for (let i = 0; i < 200; i++) {
+        gl.uniform4f(colorUniformLocation, Math.random(), Math.random(), Math.random(), 1);
+        createCircle(gl, 100 + random(gl.canvas.width - 200), 100 + random(gl.canvas.height - 200), random(50));
+    }
 }
 
-main();
+function random(range) {
+    return Math.floor(Math.random() * range);
+}
+
+/**
+ *
+ * @param {WebGLRenderingContextBase} gl
+ * @param {number} x
+ * @param {number} y
+ * @param {number} width
+ * @param {number} height
+ */
+function createRect(gl, x, y, width, height) {
+    const x1 = x;
+    const x2 = x + width;
+    const y1 = y;
+    const y2 = y + height;
+
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        x1, y1,
+        x2, y2,
+        x1, y2,
+        x1, y1,
+        x2, y1,
+        x2, y2
+    ]), gl.STATIC_DRAW);
+}
+
+/**
+ *
+ * @param {WebGLRenderingContextBase} gl
+ * @param {number[][]} points
+ * @param {number} width
+ */
+function strokePath(gl, points, width) {
+    const verts = [];
+    points.forEach((p, i) => {
+
+        if (i + 1 < points.length) {
+            const x1 = p[0];
+            const x2 = points[i + 1][0];
+            const y1 = p[1];
+            const y2 = points[i + 1][1];
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+
+            const theta = Math.atan(dy / dx);
+
+            const xp = (width / 2) * Math.sin(theta);
+            const yp = (width / 2) * Math.cos(theta);
+
+            const c1 = [x1 + xp, y1 - yp];
+            const c2 = [x2 + xp, y2 - yp];
+            const c3 = [x2 - xp, y2 + yp];
+            const c4 = [x1 - xp, y1 + yp];
+
+            verts.push(...c4, ...c1, ...c3, ...c2);
+        } else {
+            const x1 = points[i-1][0];
+            const x2 = p[0];
+            const y1 = points[i-1][1];
+            const y2 = p[1];
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+
+            const theta = Math.atan(dy / dx);
+
+            const xp = (width / 2) * Math.sin(theta);
+            const yp = (width / 2) * Math.cos(theta);
+
+            const c2 = [x2 + xp, y2 - yp];
+            verts.push(...c2);
+        }
+    });
+
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+    const count = verts.length / 2;
+    const offset = 0;
+    gl.drawArrays(gl.TRIANGLE_STRIP, offset, count);
+}
+
+function createCircle(gl, cx, cy, r) {
+    const verts = [];
+
+    const nPoints = 10 + (10 * Math.ceil(Math.log10(r)));
+
+    const rad = (2 * Math.PI) / nPoints;
+
+    /**
+     * Go around the circle taking points from the start on either side
+     *
+     *                   1
+     *                3     2
+     *               5       4
+     *                7     6
+     *                   8
+     *
+     * and use those points as vertices for a TRIANGLE_STRIP constructed circle
+     */
+    for (let i = 0; i <= nPoints / 2; i++) {
+        const x1 = cx + (r * Math.cos(rad * i));
+        const y1 = cy + (r * Math.sin(rad * i));
+
+        const x2 = cx + (r * Math.cos(rad * -i));
+        const y2 = cy + (r * Math.sin(rad * -i));
+
+        verts.push(x1, y1, x2, y2);
+    }
+
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+    const count = verts.length / 2;
+    const offset = 0;
+    gl.drawArrays(gl.TRIANGLE_STRIP, offset, count);
+}
+
+/**
+ *
+ * @param {WebGLRenderingContextBase} gl
+ * @param {number} x1
+ * @param {number} y1
+ * @param {number} x2
+ * @param {number} y2
+ * @param {number} width
+ */
+function createLine(gl, x1, y1, x2, y2, width) {
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+
+    const theta = Math.atan(dy / dx);
+
+    const xp = (width / 2) * Math.sin(theta);
+    const yp = (width / 2) * Math.cos(theta);
+
+    const c1 = [x1 + xp, y1 - yp];
+    const c2 = [x2 + xp, y2 - yp];
+    const c3 = [x2 - xp, y2 + yp];
+    const c4 = [x1 - xp, y1 + yp];
+
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        c4[0], c4[1],
+        c1[0], c1[1],
+        c2[0], c2[1],
+        c4[0], c4[1],
+        c2[0], c2[1],
+        c3[0], c3[1]
+    ]), gl.STATIC_DRAW);
+}
 
 /**
  *
