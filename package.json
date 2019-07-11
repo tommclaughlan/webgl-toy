@@ -4,11 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "webpack",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "serve": "^11.0.2"
+    "@babel/core": "^7.5.0",
+    "babel-core": "^6.26.3",
+    "babel-loader": "^8.0.6",
+    "serve": "^11.0.2",
+    "webpack": "^4.35.2",
+    "webpack-cli": "^3.3.5"
   }
 }
