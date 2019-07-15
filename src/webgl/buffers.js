@@ -2,22 +2,24 @@
 /**
  * @param gl {WebGLRenderingContext}
  */
-export default(gl) => {
+export default(gl, program) => {
     const buf = gl.createBuffer();
 
-    const data = (data) => {
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-        gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
-        return buf;
-    }
 
-    /**
-     * @param offset {number}
-     * @param data {Float32Array}
-     */
-    data.updateData = (offset, data) => {
+    const data = (data, name, components=3) => {
+        const location = gl.getAttribLocation(program, name);
         gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-        gl.bufferSubData(gl.ARRAY_BUFFER, offset * Float32Array.BYTES_PER_ELEMENT, data);
+
+        gl.vertexAttribPointer(
+            location,
+            components,
+            gl.FLOAT,
+            false,
+            0,
+            0);
+        gl.enableVertexAttribArray(location);
+
+        gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
         return buf;
     }
 

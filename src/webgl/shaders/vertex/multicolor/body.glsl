@@ -1,0 +1,1 @@
+vColor = aColor;

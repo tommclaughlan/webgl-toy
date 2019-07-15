@@ -4,7 +4,6 @@ export const translateFunction = `
     vec2 translateVertex(vec2 vertex) {
         return vertex + uTranslate;
     }
-    #define TRANSLATE_VERTEX;
 `;
 
 export const scaleFunction = `
@@ -13,67 +12,112 @@ export const scaleFunction = `
     vec2 scaleVertex(vec2 vertex) {
         return vertex * uScale;
     }
-    #define SCALE_VERTEX;
 `;
 
 export const clipSpaceFunction = `
-    #ifndef SCALE_VERTEX
-        vec2 scaleVertex(vec2 vertex) {
-            return vertex;
-        }
-    #endif
-
-    #ifndef TRANSLATE_VERTEX
-        vec2 translateVertex(vec2 vertex) {
-            return vertex;
-        }
-    #endif
-
     uniform vec2 uResolution;
 
     vec2 toClipSpace(vec2 vertex) {
         return scaleVertex((2.0 * (translateVertex(vertex) / uResolution)) - 1.0);
     }
-    #define TO_CLIP_SPACE;
-`
+`;
+
+const passColourVertexShader = {
+    header : `
+        attribute vec4 aColor;
+
+        varying vec4 vColor;
+    `,
+    body : `
+        vColor = aColor;
+    `
+};
+
+const pointVertexShader = {
+    header : `
+        varying float vSize;
+    `,
+    body : `
+        vSize = v[2];
+
+        gl_PointSize = vSize;
+    `
+};
+
+const toClipSpaceBody = `
+    v = vec4(toClipSpace(v.xy), 0.0, 1.0);
+`;
+
+const vertexShaderHeader = `
+    ${passColourVertexShader.header}
+    ${pointVertexShader.header}
+    ${translateFunction}
+    ${scaleFunction}
+    ${clipSpaceFunction}
+    `;
+const vertexShaderBody = `
+    ${passColourVertexShader.body}
+    ${pointVertexShader.body}
+    ${toClipSpaceBody}
+    `;
 
 export const vertexShader = `
     precision mediump float;
     attribute vec4 aVertexPosition;
-    attribute vec4 aColor;
 
-    varying float vSize;
-    varying vec4 vColor;
-
-    #ifndef TO_CLIP_SPACE
-        vec2 toClipSpace(vec2 vertex) {
-            return vertex;
-        }
-    #endif
+    ${vertexShaderHeader}
 
     void main() {
-        vec2 vertex = toClipSpace(vec2(aVertexPosition[0], aVertexPosition[1]));
-        vSize = aVertexPosition[2];
-        gl_Position = vec4(vertex, 0.0, 1.0);
-        gl_PointSize = vSize;
-        vColor = aColor;
+        vec4 v = aVertexPosition;
+
+        ${vertexShaderBody}
+
+        gl_Position = v;
     }
 `;
+
+const fragmentShaderColor = {
+    header : `
+        varying vec4 vColor;
+    `,
+    body : `
+        v = vColor;
+    `
+};
+
+const fragmentShaderCircle = {
+    header : `
+        varying float vSize;
+    `,
+    body : `
+        float distance = length(2.0 * gl_PointCoord - 1.0) * vSize;
+        if (distance > vSize) {
+            discard;
+            return;
+        }
+    `
+};
+
+const fragmentShaderHeader = `
+    ${fragmentShaderColor.header}
+    ${fragmentShaderCircle.header}
+    `;
+
+const fragmentShaderBody = `
+    ${fragmentShaderColor.body}
+    ${fragmentShaderCircle.body}
+    `;
 
 export const fragmentShader = `
     precision mediump float;
 
-    uniform vec4 uColor;
-
-    varying float vSize;
-    varying vec4 vColor;
+    ${fragmentShaderHeader}
 
     void main() {
-        float distance = length(2.0 * gl_PointCoord - 1.0) * vSize;
-        if (distance > vSize) {
-            discard;
-        } else {
-            gl_FragColor = vColor;
-        }
+        vec4 v = vec4(0.0, 0.0, 0.0, 1.0);
+
+        ${fragmentShaderBody}
+
+        gl_FragColor = v;
     }
 `;

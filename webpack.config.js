@@ -1,4 +1,5 @@
 const path = require('path');
+const CopyWebapckPlugin = require('copy-webpack-plugin');
 
 module.exports = {
     entry : {
@@ -14,5 +15,10 @@ module.exports = {
             }
         ]
     },
+    plugins : [
+        new CopyWebapckPlugin([
+            { from : 'src/webgl/shaders', to : 'shaders' }
+        ])
+    ],
     devtool: 'source-map'
 };
